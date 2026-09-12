@@ -7,8 +7,11 @@
   REQUIRED ARDUINO LIBRARIES (Install via Arduino Library Manager):
   1. Adafruit GFX Library (by Adafruit)
   2. Adafruit SSD1306 (by Adafruit)
-  3. ESPAsyncWebServer (by me-no-dev / mathieucarbou)
-  4. AsyncTCP (by me-no-dev / devyte)
+  
+  BUILT-IN ESP32 CORE LIBRARIES USED:
+  - WiFi.h
+  - WebServer.h (Standard built-in WebServer compatible with ESP32 Core v3.x)
+  - Wire.h
 
   HARDWARE PIN MAPPING:
   - ESP32 Microcontroller (ESP32 Dev Module)
@@ -27,7 +30,7 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
-#include <ESPAsyncWebServer.h>
+#include <WebServer.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -51,7 +54,7 @@
 
 // --- Global Objects & State Variables ---
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-AsyncWebServer server(80);
+WebServer server(80);
 
 enum RobotState {
     STATE_IDLE,
@@ -145,6 +148,36 @@ void processCopyPayload(const String& payload) {
     driveForward();
 }
 
+// --- Web Server Endpoint Handlers ---
+void handleStatus() {
+    server.send(200, "text/plain", getStatusString());
+}
+
+void handleCopy() {
+    String payload = "";
+    if (server.hasArg("text")) {
+        payload = server.arg("text");
+    } else if (server.hasArg("data")) {
+        payload = server.arg("data");
+    } else if (server.hasArg("plain")) {
+        payload = server.arg("plain");
+    }
+    
+    processCopyPayload(payload);
+    server.send(200, "text/plain", "OK - TRANSIT STARTED");
+}
+
+void handleData() {
+    String responsePayload = storedData;
+    
+    // Reset state and screen after paste / data retrieval
+    currentState = STATE_IDLE;
+    storedData = "";
+    displayIdleStatus();
+    
+    server.send(200, "text/plain", responsePayload);
+}
+
 void setup() {
     Serial.begin(115200);
 
@@ -176,66 +209,19 @@ void setup() {
     Serial.print("Access Point IP: ");
     Serial.println(WiFi.softAPIP());
 
-    // --- Web Server Endpoints ---
-
-    // 1. GET /status endpoint
-    server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/plain", getStatusString());
-    });
-
-    // 2. POST /copy endpoint
-    server.on("/copy", HTTP_POST, 
-        [](AsyncWebServerRequest *request) {
-            // Executed after body processing or for query/form params
-            if (!request->_tempObject) {
-                String payload = "";
-                if (request->hasParam("text", true)) {
-                    payload = request->getParam("text", true)->value();
-                } else if (request->hasParam("text")) {
-                    payload = request->getParam("text")->value();
-                } else if (request->hasParam("data", true)) {
-                    payload = request->getParam("data", true)->value();
-                } else if (request->hasParam("data")) {
-                    payload = request->getParam("data")->value();
-                }
-                processCopyPayload(payload);
-                request->send(200, "text/plain", "OK - TRANSIT STARTED");
-            }
-        }, 
-        nullptr, 
-        [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-            static String bodyBuffer = "";
-            if (index == 0) {
-                bodyBuffer = "";
-                request->_tempObject = (void*)1;
-            }
-            for (size_t i = 0; i < len; i++) {
-                bodyBuffer += (char)data[i];
-            }
-            if (index + len == total) {
-                processCopyPayload(bodyBuffer);
-                request->send(200, "text/plain", "OK - TRANSIT STARTED");
-            }
-        }
-    );
-
-    // 3. GET /data endpoint
-    server.on("/data", HTTP_GET, [](AsyncWebServerRequest *request) {
-        String responsePayload = storedData;
-        
-        // Reset state and screen after paste / data retrieval
-        currentState = STATE_IDLE;
-        storedData = "";
-        displayIdleStatus();
-        
-        request->send(200, "text/plain", responsePayload);
-    });
+    // --- Register Web Server Endpoints ---
+    server.on("/status", HTTP_GET, handleStatus);
+    server.on("/copy", HTTP_POST, handleCopy);
+    server.on("/data", HTTP_GET, handleData);
 
     server.begin();
     Serial.println("HTTP server started.");
 }
 
 void loop() {
+    // Process incoming client HTTP requests
+    server.handleClient();
+
     // Non-blocking IR Obstacle Sensor check during TRANSIT state
     if (digitalRead(IR_SENSOR_PIN) == LOW && currentState == STATE_TRANSIT) {
         stopMotors();
