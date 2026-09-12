@@ -30,7 +30,8 @@ AsyncWebServer server(80);
 enum RobotState {
     STATE_IDLE,
     STATE_TRANSIT,
-    STATE_ARRIVED
+    STATE_ARRIVED,
+    STATE_FAILED
 };
 
 RobotState currentState = STATE_IDLE;
@@ -89,12 +90,25 @@ void displayArrivedStatus() {
     display.display();
 }
 
+void displayFailedStatus() {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 0);
+    display.setTextWrap(true);
+    display.println("PACKET DROPPED!");
+    display.println("Try again.");
+    display.display();
+}
+
 String getStatusString() {
     switch (currentState) {
         case STATE_TRANSIT:
             return "TRANSIT";
         case STATE_ARRIVED:
             return "ARRIVED";
+        case STATE_FAILED:
+            return "FAILED";
         case STATE_IDLE:
         default:
             return "IDLE";
@@ -111,6 +125,9 @@ void processCopyPayload(const String& payload) {
 
 void setup() {
     Serial.begin(115200);
+
+    // Seed random number generator
+    randomSeed(analogRead(0));
 
     // Initialize Motor Pins
     pinMode(IN1_PIN, OUTPUT);
@@ -220,12 +237,24 @@ void loop() {
             distanceCm = (duration * 0.0343f) / 2.0f;
         }
 
-        // Crash prevention logic: if in TRANSIT and distance < 5cm, stop and arrive
+        // Crash prevention & arrival logic with 50% packet loss probability
         if (currentState == STATE_TRANSIT && distanceCm > 0.0f && distanceCm < 5.0f) {
             stopMotors();
-            currentState = STATE_ARRIVED;
-            displayArrivedStatus();
-            Serial.println("Obstacle detected! Vehicle ARRIVED.");
+
+            // 50/50 probability check
+            if (random(0, 100) > 50) {
+                // SUCCESS (>50): Keep current behavior
+                currentState = STATE_ARRIVED;
+                displayArrivedStatus();
+                Serial.println("Obstacle detected! Vehicle ARRIVED successfully.");
+            } else {
+                // FAILURE (<=50): Packet dropped
+                currentState = STATE_FAILED;
+                storedData = "";
+                displayFailedStatus();
+                Serial.println("Obstacle detected! PACKET DROPPED.");
+            }
         }
     }
 }
+
