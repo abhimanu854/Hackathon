@@ -9,12 +9,11 @@
 // L298N Motor Driver Pins
 #define IN1_PIN 26
 #define IN2_PIN 27
-#define IN3_PIN 33
+#define IN3_PIN 14
 #define IN4_PIN 32
 
-// HC-SR04 Ultrasonic Sensor Pins
-#define TRIG_PIN 5
-#define ECHO_PIN 18
+// IR Obstacle Sensor Pin
+#define IR_SENSOR_PIN 33
 
 // OLED Display Pins (I2C)
 #define SDA_PIN 21
@@ -36,10 +35,6 @@ enum RobotState {
 
 RobotState currentState = STATE_IDLE;
 String storedData = "";
-
-// Non-blocking ultrasonic timer variables
-unsigned long lastPingTime = 0;
-const unsigned long PING_INTERVAL = 50; // Ping every 50ms
 
 // --- Motor Control Helper Functions ---
 void stopMotors() {
@@ -136,10 +131,8 @@ void setup() {
     pinMode(IN4_PIN, OUTPUT);
     stopMotors();
 
-    // Initialize HC-SR04 Pins
-    pinMode(TRIG_PIN, OUTPUT);
-    pinMode(ECHO_PIN, INPUT);
-    digitalWrite(TRIG_PIN, LOW);
+    // Initialize IR Sensor Pin
+    pinMode(IR_SENSOR_PIN, INPUT);
 
     // Initialize I2C and OLED Display
     Wire.begin(SDA_PIN, SCL_PIN);
@@ -216,45 +209,22 @@ void setup() {
 }
 
 void loop() {
-    unsigned long currentMillis = millis();
+    // Check IR Obstacle Sensor (active LOW) during TRANSIT
+    if (digitalRead(IR_SENSOR_PIN) == LOW && currentState == STATE_TRANSIT) {
+        stopMotors();
 
-    // Non-blocking ultrasonic distance measurement trigger
-    if (currentMillis - lastPingTime >= PING_INTERVAL) {
-        lastPingTime = currentMillis;
-
-        // Trigger HC-SR04 pulse
-        digitalWrite(TRIG_PIN, LOW);
-        delayMicroseconds(2);
-        digitalWrite(TRIG_PIN, HIGH);
-        delayMicroseconds(10);
-        digitalWrite(TRIG_PIN, LOW);
-
-        // Read echo duration with a 25ms timeout (~400cm max range)
-        long duration = pulseIn(ECHO_PIN, HIGH, 25000);
-        float distanceCm = 999.0;
-
-        if (duration > 0) {
-            distanceCm = (duration * 0.0343f) / 2.0f;
-        }
-
-        // Crash prevention & arrival logic with 50% packet loss probability
-        if (currentState == STATE_TRANSIT && distanceCm > 0.0f && distanceCm < 5.0f) {
-            stopMotors();
-
-            // 50/50 probability check
-            if (random(0, 100) > 50) {
-                // SUCCESS (>50): Keep current behavior
-                currentState = STATE_ARRIVED;
-                displayArrivedStatus();
-                Serial.println("Obstacle detected! Vehicle ARRIVED successfully.");
-            } else {
-                // FAILURE (<=50): Packet dropped
-                currentState = STATE_FAILED;
-                storedData = "";
-                displayFailedStatus();
-                Serial.println("Obstacle detected! PACKET DROPPED.");
-            }
+        // 50/50 probability check
+        if (random(0, 100) > 50) {
+            // SUCCESS (>50): Keep current behavior
+            currentState = STATE_ARRIVED;
+            displayArrivedStatus();
+            Serial.println("IR Obstacle detected! Vehicle ARRIVED successfully.");
+        } else {
+            // FAILURE (<=50): Packet dropped
+            currentState = STATE_FAILED;
+            storedData = "";
+            displayFailedStatus();
+            Serial.println("IR Obstacle detected! PACKET DROPPED.");
         }
     }
 }
-
