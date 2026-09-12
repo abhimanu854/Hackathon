@@ -1,3 +1,30 @@
+/*
+  =============================================================================
+  AIR-GAPPED CLIPBOARD: KINETIC TRANSPORT VEHICLE FIRMWARE
+  Arduino IDE Compatible Master Sketch (esp32_firmware.ino)
+  =============================================================================
+  
+  REQUIRED ARDUINO LIBRARIES (Install via Arduino Library Manager):
+  1. Adafruit GFX Library (by Adafruit)
+  2. Adafruit SSD1306 (by Adafruit)
+  3. ESPAsyncWebServer (by me-no-dev / mathieucarbou)
+  4. AsyncTCP (by me-no-dev / devyte)
+
+  HARDWARE PIN MAPPING:
+  - ESP32 Microcontroller (ESP32 Dev Module)
+  - L298N Motor Driver Pins:
+      IN1 -> GPIO 26
+      IN2 -> GPIO 27
+      IN3 -> GPIO 14
+      IN4 -> GPIO 12
+  - IR Obstacle Sensor:
+      OUT -> GPIO 33 (Active LOW on obstacle detection)
+  - 0.96-inch SSD1306 OLED Display (I2C):
+      SDA -> GPIO 21
+      SCL -> GPIO 22
+  =============================================================================
+*/
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
@@ -10,7 +37,7 @@
 #define IN1_PIN 26
 #define IN2_PIN 27
 #define IN3_PIN 14
-#define IN4_PIN 32
+#define IN4_PIN 12
 
 // IR Obstacle Sensor Pin
 #define IR_SENSOR_PIN 33
@@ -22,7 +49,7 @@
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1
 
-// --- Global Objects & Variables ---
+// --- Global Objects & State Variables ---
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 AsyncWebServer server(80);
 
@@ -121,7 +148,7 @@ void processCopyPayload(const String& payload) {
 void setup() {
     Serial.begin(115200);
 
-    // Seed random number generator
+    // Seed random number generator for packet drop coin toss
     randomSeed(analogRead(0));
 
     // Initialize Motor Pins
@@ -131,13 +158,13 @@ void setup() {
     pinMode(IN4_PIN, OUTPUT);
     stopMotors();
 
-    // Initialize IR Sensor Pin
+    // Initialize IR Sensor Pin (Active LOW)
     pinMode(IR_SENSOR_PIN, INPUT);
 
     // Initialize I2C and OLED Display
     Wire.begin(SDA_PIN, SCL_PIN);
     if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-        // Fallback address check if 0x3C fails
+        // Fallback I2C address check if 0x3C fails
         display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
     }
     
@@ -209,13 +236,13 @@ void setup() {
 }
 
 void loop() {
-    // Check IR Obstacle Sensor (active LOW) during TRANSIT
+    // Non-blocking IR Obstacle Sensor check during TRANSIT state
     if (digitalRead(IR_SENSOR_PIN) == LOW && currentState == STATE_TRANSIT) {
         stopMotors();
 
-        // 50/50 probability check
+        // 50/50 probability coin toss for packet drop mechanic
         if (random(0, 100) > 50) {
-            // SUCCESS (>50): Keep current behavior
+            // SUCCESS (>50): Transit arrived successfully
             currentState = STATE_ARRIVED;
             displayArrivedStatus();
             Serial.println("IR Obstacle detected! Vehicle ARRIVED successfully.");
