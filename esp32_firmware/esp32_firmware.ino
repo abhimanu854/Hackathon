@@ -5,9 +5,9 @@
   =============================================================================
   
   FEATURE: "GOLDFISH MEMORY" EDITION 🐟
-  This robot car possesses the memory retention span of a goldfish (3-5 seconds max).
-  If kinetic transit takes too long or a random distraction occurs mid-transit,
-  the ESP32 literally forgets what text payload it was carrying, wipes its memory,
+  This robot car possesses the memory retention span of a goldfish.
+  Upon physical collision at the receiver dock, there is a 30% chance the robot
+  gets distracted, forgets what payload it was carrying, wipes its memory,
   and displays a confused face on its OLED display.
 
   REQUIRED ARDUINO LIBRARIES (Install via Arduino Library Manager):
@@ -72,10 +72,6 @@ enum RobotState {
 RobotState currentState = STATE_IDLE;
 String storedData = "";
 
-// Goldfish Memory Timer Variables (Short-Term Memory Loss Engine)
-unsigned long transitStartTime = 0;
-unsigned long goldfishAttentionSpan = 4000; // Robot forgets everything after 3-5 seconds!
-
 // --- Motor Control Helper Functions ---
 void stopMotors() {
     digitalWrite(IN1_PIN, LOW);
@@ -110,7 +106,7 @@ void displayTransitText(const String& text) {
     display.setTextColor(SSD1306_WHITE);
     display.setCursor(0, 0);
     display.setTextWrap(true);
-    display.println("IN TRANSIT (Thinking):");
+    display.println("IN TRANSIT:");
     display.println(text);
     display.display();
 }
@@ -162,15 +158,6 @@ void processCopyPayload(const String& payload) {
     storedData = payload;
     displayTransitText(storedData);
     currentState = STATE_TRANSIT;
-    
-    // Record start of transit & randomize goldfish attention span (3.0s to 5.0s)
-    transitStartTime = millis();
-    goldfishAttentionSpan = random(3000, 5000); 
-    
-    Serial.print("Payload received! Goldfish memory timer set to ");
-    Serial.print(goldfishAttentionSpan);
-    Serial.println(" ms.");
-
     driveForward();
 }
 
@@ -207,7 +194,7 @@ void handleData() {
 void setup() {
     Serial.begin(115200);
 
-    // Seed random number generator using floating analog noise
+    // Seed random number generator using floating analog noise (Pin 0)
     randomSeed(analogRead(0));
 
     // Initialize Motor Pins
@@ -248,37 +235,24 @@ void loop() {
     // Process incoming client HTTP requests
     server.handleClient();
 
-    // --- GOLDFISH MEMORY ENGINE ---
-    if (currentState == STATE_TRANSIT) {
-        unsigned long currentMillis = millis();
+    // --- GOLDFISH MEMORY ENGINE (Triggered on Bumper Collision) ---
+    if (digitalRead(IR_SENSOR_PIN) == LOW && currentState == STATE_TRANSIT) {
+        stopMotors();
 
-        // 1. Check if the robot's short-term memory expired mid-transit!
-        if (currentMillis - transitStartTime >= goldfishAttentionSpan) {
-            stopMotors();
+        // Roll 1 to 100 for goldfish short-term memory check
+        int roll = random(1, 101);
+
+        if (roll <= 30) {
+            // 30% Chance: GOLDFISH MEMORY LOSS!
             currentState = STATE_FAILED;
             storedData = ""; // LITERAL MEMORY WIPE: Robot forgot what it was holding!
             displayFailedStatus();
-            Serial.println("GOLDFISH BRAIN TRIGGERED: Robot drove for too long, got distracted, and forgot the payload!");
-            return;
-        }
-
-        // 2. Check if IR Obstacle Sensor triggered physical arrival
-        if (digitalRead(IR_SENSOR_PIN) == LOW) {
-            stopMotors();
-
-            // Random distraction check on collision: Did the bump make it forget?
-            if (random(0, 100) > 40) {
-                // SUCCESS: Robot actually remembered!
-                currentState = STATE_ARRIVED;
-                displayArrivedStatus();
-                Serial.println("Miracle! Robot bumped into target and remembered the payload.");
-            } else {
-                // FAILURE: Impact caused instant memory wipe!
-                currentState = STATE_FAILED;
-                storedData = ""; // Payload erased!
-                displayFailedStatus();
-                Serial.println("BLANK STARE: Robot hit the receiver, but forgot why it came here!");
-            }
+            Serial.println("GOLDFISH BRAIN: Robot bumped into target, got distracted, and forgot the payload!");
+        } else {
+            // 70% Chance: SUCCESS!
+            currentState = STATE_ARRIVED;
+            displayArrivedStatus();
+            Serial.println("SUCCESS: Robot arrived at dock and remembered the payload!");
         }
     }
 }
