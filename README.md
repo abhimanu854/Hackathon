@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-yellow.svg)](https://www.python.org/)
 [![Arduino](https://img.shields.io/badge/Framework-Arduino%20IDE%20%2F%20ESP32-00979D.svg)](https://www.arduino.cc/)
 
-> **The Absurd Kinetic Security Solution**: An air-gapped clipboard system that intercepts local OS copy events on a Windows laptop, wipes the local clipboard, transmits the payload over an independent ESP32 Wi-Fi SoftAP network, physically drives a 4WD robot car across the room, and injects the data into a target Fedora Linux receiver's clipboard upon physical collision!
+> **The Absurd Kinetic Security Solution**: An air-gapped clipboard system that intercepts local OS copy events on a Windows laptop, wipes the local clipboard, transmits the payload over an independent ESP32 Wi-Fi SoftAP network, physically drives a 4WD robot car across the room, and injects the data into a target Fedora Linux receiver's clipboard upon physical collision — assuming the goldfish-brained robot doesn't get distracted and forget the payload mid-transit!
 
 ---
 
@@ -26,19 +26,20 @@
                                                          |                                            |
                                                          | (Physical Transit)                         |
                                                          v                                            |
-                                             [ Physical Destination ]                                 |
-                                             IR Obstacle Sensor (Pin 33)                              |
-                                             Triggers LOW on Collision                                |
+                                             [ Goldfish Memory Engine ]                               |
+                                             3.0s - 5.0s Distraction Timer                            |
+                                             & IR Sensor Bumper (Pin 33)                              |
                                                          |                                            |
                                                          +--------------------------------------------+
-                                                         | 50/50 Coin Toss Check                      |
+                                                         | Short-Term Memory Check                    |
                                                          |                                            |
-                                                         |---> SUCCESS (>50): Status = "ARRIVED"      |
+                                                         |---> REMEMBERED: Status = "ARRIVED"         |
                                                          |     HTTP GET /status -> "ARRIVED" -------->|
                                                          |     HTTP GET /data   -> Downloads text ----> Inject to OS Clip
                                                          |                                            | (pyperclip.copy)
-                                                         |---> FAILURE (<=50): Status = "FAILED"     |
-                                                               HTTP GET /status -> "FAILED" ---------> Log Packet Loss
+                                                         |---> FORGOT: Status = "FAILED"              |
+                                                               ( O_o ) "Uhh... I forgot."             |
+                                                               HTTP GET /status -> "FAILED" ---------> Log Packet Drop
 ```
 
 ---
@@ -55,7 +56,7 @@ air-gapped-clipboard/
 │   └── requirements.txt          # Python dependencies (requests, pyperclip, keyboard)
 │
 ├── esp32_firmware/               # ESP32 Microcontroller Firmware (Arduino IDE)
-│   └── esp32_firmware.ino        # Master sketch (.ino) - WebServer, OLED, L298N, IR Sensor
+│   └── esp32_firmware.ino        # Master sketch (.ino) - Goldfish Memory, WebServer, OLED, L298N, IR Sensor
 │
 └── README.md                     # Comprehensive Master Documentation
 ```
@@ -118,21 +119,19 @@ pip install requests pyperclip
 
 ---
 
-## 🎲 The 50/50 Packet Drop Coin Toss
+## 🐟 The "Goldfish Memory" Feature
 
-To realistically simulate kinetic network latency and physical packet loss, the ESP32 firmware implements a randomized probability check:
+To add physical comedy and realistically simulate kinetic data loss, the ESP32 vehicle features the memory retention span of a **goldfish**:
 
-1. In `setup()`, the random generator is seeded using noise from an unconnected analog pin: `randomSeed(analogRead(0))`.
-2. When the IR obstacle sensor triggers (`digitalRead(33) == LOW`), the vehicle cuts power to all motors and runs:
-   ```cpp
-   if (random(0, 100) > 50) {
-       currentState = STATE_ARRIVED; // Payload preserved, ready for transfer
-   } else {
-       currentState = STATE_FAILED;  // Packet dropped! Payload cleared.
-   }
+1. **Short-Term Memory Timer**: Upon receiving text via `HTTP POST /copy`, the ESP32 seeds a random attention span (`goldfishAttentionSpan` between 3.0s and 5.0s).
+2. **Mid-Transit Distraction**: If the robot takes longer than its attention span to reach the destination dock, it gets distracted, cuts power to the motors, wipes its memory (`storedData = ""`), and triggers a memory loss alert.
+3. **Collision Disorientation**: When the IR sensor hits (`digitalRead(33) == LOW`), an impact check determines if the physical collision disoriented the robot into forgetting why it drove across the room.
+4. **Confused ASCII OLED Display**: When memory loss occurs, the OLED screen clears and displays:
+   ```text
+      ( O_o )
+    Uhh... I forgot.
+   [ Goldfish Memory ]
    ```
-3. If **SUCCESS (>50)**: `/status` returns `"ARRIVED"`, allowing `receiver.py` to download the text from `/data` and inject it into the local clipboard.
-4. If **FAILURE (<=50)**: `/status` returns `"FAILED"`, clearing the stored data and rendering `"PACKET DROPPED! Try again."` on the OLED display.
 
 ---
 
@@ -169,8 +168,8 @@ python client_hijacker/client.py
 3. **Kinetic Transit**: The ESP32 car powers its 4WD BO motors forward across the floor with the copied text printed on its OLED screen.
 4. **Physical Collision**: The car collides with **Laptop B's dock**, driving IR sensor Pin 33 `LOW`.
 5. **Data Injection**:
-   - If the coin toss passes, **Laptop B's** `receiver.py` fetches the text, plays a chime, and **injects it directly into Laptop B's OS clipboard**.
-   - Press `Ctrl+V` on Laptop B to paste the air-gapped data!
+   - If the goldfish robot **remembers** its payload, **Laptop B's** `receiver.py` fetches the text, plays a chime, and **injects it directly into Laptop B's OS clipboard**. Press `Ctrl+V` on Laptop B to paste!
+   - If the robot **gets distracted / forgets**, its OLED displays `( O_o ) Uhh... I forgot.`, and Laptop B logs a `PACKET DROPPED` physical memory failure!
 
 ---
 
