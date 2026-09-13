@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-yellow.svg)](https://www.python.org/)
 [![Arduino](https://img.shields.io/badge/Framework-Arduino%20IDE%20%2F%20ESP32-00979D.svg)](https://www.arduino.cc/)
 
-> **The Absurd Kinetic Security Solution**: An air-gapped clipboard system that intercepts local OS copy events on a Windows laptop, wipes the local clipboard, transmits the payload over an independent ESP32 Wi-Fi SoftAP network, physically drives a 4WD robot car across the room, and injects the data into a target Fedora Linux receiver's clipboard upon physical collision — assuming the goldfish-brained robot doesn't get distracted and forget the payload mid-transit!
+> **The Absurd Kinetic Security Solution**: An air-gapped clipboard system that intercepts local OS copy events on a Windows laptop, wipes the local clipboard, transmits the payload over an independent ESP32 Wi-Fi SoftAP network, physically drives a 4WD robot car across the room, and injects the data into a target Fedora Linux receiver's clipboard upon physical collision — assuming the goldfish-brained robot doesn't get disoriented and forget the payload!
 
 ---
 
@@ -26,20 +26,20 @@
                                                          |                                            |
                                                          | (Physical Transit)                         |
                                                          v                                            |
-                                             [ Goldfish Memory Engine ]                               |
-                                             3.0s - 5.0s Distraction Timer                            |
-                                             & IR Sensor Bumper (Pin 33)                              |
+                                             [ Physical Collision ]                                   |
+                                             IR Obstacle Sensor (Pin 33)                              |
+                                             Triggers LOW on Docking Impact                           |
                                                          |                                            |
                                                          +--------------------------------------------+
-                                                         | Short-Term Memory Check                    |
+                                                         | Goldfish Memory Check (1..100)             |
                                                          |                                            |
-                                                         |---> REMEMBERED: Status = "ARRIVED"         |
+                                                         |---> 70% SUCCESS (>30): Status = "ARRIVED"  |
                                                          |     HTTP GET /status -> "ARRIVED" -------->|
                                                          |     HTTP GET /data   -> Downloads text ----> Inject to OS Clip
                                                          |                                            | (pyperclip.copy)
-                                                         |---> FORGOT: Status = "FAILED"              |
+                                                         |---> 30% FAILURE (<=30): Status = "FAILED"  |
                                                                ( O_o ) "Uhh... I forgot."             |
-                                                               HTTP GET /status -> "FAILED" ---------> Log Packet Drop
+                                                               HTTP GET /status -> "FAILED" ---------> Log Memory Loss
 ```
 
 ---
@@ -123,10 +123,11 @@ pip install requests pyperclip
 
 To add physical comedy and realistically simulate kinetic data loss, the ESP32 vehicle features the memory retention span of a **goldfish**:
 
-1. **Short-Term Memory Timer**: Upon receiving text via `HTTP POST /copy`, the ESP32 seeds a random attention span (`goldfishAttentionSpan` between 3.0s and 5.0s).
-2. **Mid-Transit Distraction**: If the robot takes longer than its attention span to reach the destination dock, it gets distracted, cuts power to the motors, wipes its memory (`storedData = ""`), and triggers a memory loss alert.
-3. **Collision Disorientation**: When the IR sensor hits (`digitalRead(33) == LOW`), an impact check determines if the physical collision disoriented the robot into forgetting why it drove across the room.
-4. **Confused ASCII OLED Display**: When memory loss occurs, the OLED screen clears and displays:
+1. **RNG Seeding**: In `setup()`, the random number generator is seeded with noise from floating analog pin 0: `randomSeed(analogRead(0))`.
+2. **Impact Memory Roll**: The moment the IR bumper hits the receiving dock (`digitalRead(33) == LOW`), the ESP32 stops the motors and rolls `random(1, 101)`:
+   - **70% Success (`roll > 30`)**: The robot remembers the payload! State transitions to `STATE_ARRIVED` and data is preserved for retrieval via `/data`.
+   - **30% Memory Loss (`roll <= 30`)**: Goldfish memory loss! State transitions to `STATE_FAILED`, `storedData` is wiped clean (`""`), and the robot forgets why it drove across the room.
+3. **Confused ASCII OLED Display**: When memory loss occurs, the OLED screen displays:
    ```text
       ( O_o )
     Uhh... I forgot.
@@ -168,8 +169,8 @@ python client_hijacker/client.py
 3. **Kinetic Transit**: The ESP32 car powers its 4WD BO motors forward across the floor with the copied text printed on its OLED screen.
 4. **Physical Collision**: The car collides with **Laptop B's dock**, driving IR sensor Pin 33 `LOW`.
 5. **Data Injection**:
-   - If the goldfish robot **remembers** its payload, **Laptop B's** `receiver.py` fetches the text, plays a chime, and **injects it directly into Laptop B's OS clipboard**. Press `Ctrl+V` on Laptop B to paste!
-   - If the robot **gets distracted / forgets**, its OLED displays `( O_o ) Uhh... I forgot.`, and Laptop B logs a `PACKET DROPPED` physical memory failure!
+   - **70% Chance**: The robot remembers its payload! **Laptop B's** `receiver.py` fetches the text from `/data`, plays a chime, and **injects it directly into Laptop B's OS clipboard**. Press `Ctrl+V` on Laptop B to paste!
+   - **30% Chance**: The robot gets confused upon impact! Its OLED displays `( O_o ) Uhh... I forgot.`, wipes its memory, and Laptop B logs a `PACKET DROPPED` physical memory failure!
 
 ---
 
